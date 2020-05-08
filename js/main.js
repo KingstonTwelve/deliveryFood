@@ -5,9 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.querySelector(".modal");
     const closeModal = document.querySelector(".close");
 
-    cartButton.addEventListener("click", toggleModal);
-    closeModal.addEventListener("click", toggleModal);
-
     function toggleModal() {
         modal.classList.toggle("is-open");
     }
@@ -28,10 +25,15 @@ document.addEventListener('DOMContentLoaded', () => {
         menu = document.querySelector('.menu'),
         logo = document.querySelector('.logo'),
         cardsMenu = document.querySelector('.cards-menu'),
-        restaurantInfo = document.querySelector('.restaurant-info');
+        restaurantInfo = document.querySelector('.restaurant-info'),
+        modalBody = document.querySelector('.modal-body'),
+        modalPricetag = document.querySelector('.modal-pricetag'),
+        clearCart =document.querySelector('.clear-cart');
 
 
     let login = localStorage.getItem('gloDelivery');
+
+    const cart = [];
 
     const getData = async (url) => {
         const response = await fetch(url);
@@ -40,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(`Error on address ${url},
             status error ${response.status}`);
         }
-        
+
         return await response.json();
     };
 
@@ -55,8 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         buttonAuth.style.display = 'none';
         userName.style.display = 'inline';
-        buttonOut.style.display = 'block';
-
+        buttonOut.style.display = 'flex';
+        cartButton.style.display = 'flex';
         buttonOut.addEventListener('click', logOut);
     };
 
@@ -90,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         login = '';
         localStorage.removeItem('gloDelivery', login);
 
+        cartButton.style.display = '';
         buttonAuth.style.display = '';
         userName.style.display = '';
         buttonOut.style.display = '';
@@ -108,7 +111,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const createCardRestaurant = (restaurant) => {
-        const { name, time_of_delivery: timeOfDelivery, stars, price, kitchen, image, products } = restaurant;
+        const {
+            name,
+            time_of_delivery: timeOfDelivery,
+            stars,
+            price,
+            kitchen,
+            image,
+            products
+        } = restaurant;
 
         const card = `
             <a class="card card-restaurant" data-products="${products}" data-info="${[name, stars, price, kitchen]}">
@@ -134,7 +145,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const createCardGood = (goods) => {
-        const { id, name, description, price, image } = goods;
+        const {
+            id,
+            name,
+            description,
+            price,
+            image
+        } = goods;
 
         const card = document.createElement('div');
         card.className = 'card';
@@ -150,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="card-buttons">
-                    <button class="button button-primary button-add-cart">
+                    <button class="button button-primary button-add-cart" id="${id}">
                         <span class="button-card-text">В корзину</span>
                         <span class="button-cart-svg"></span>
                     </button>
@@ -163,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const createShopInfo = (info) => {
-        const [ name, stars, price, kitchen ] = info;
+        const [name, stars, price, kitchen] = info;
 
         const desc = `
             <h2 class="section-title restaurant-title">${name}</h2>
@@ -189,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             menu.classList.remove('hide');
             cardsMenu.textContent = '';
             restaurantInfo.textContent = '';
-            
+
             createShopInfo(restaurant.dataset.info.split(','));
             getData(`./db/${restaurant.dataset.products}`).then((data) => {
                 data.forEach(createCardGood);
@@ -199,13 +216,100 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const addToCart = (event) => {
+        const target = event.target;
+        const buttonAddToCart = target.closest('.button-add-cart');
+
+        if (buttonAddToCart) {
+            const card = target.closest('.card');
+            const title = card.querySelector('.card-title-reg').textContent;
+            const cost = card.querySelector('.card-price-bold').textContent;
+            const id = buttonAddToCart.id;
+            const food = cart.find((item) => {
+                return item.id === id;
+            });
+            if (food) {
+                food.count += 1;
+            } else {
+                cart.push({
+                    id,
+                    title,
+                    cost,
+                    count: 1,
+                });
+            }
+        }
+    };
+
+    const renderCart = () => {
+        modalBody.textContent = '';
+
+        cart.forEach(({ id, title, cost, count }) => {
+            const itemCart = `
+                <div class="food-row">
+                    <span class="food-name">${title}</span>
+                    <strong class="food-price">${cost}</strong>
+                    <div class="food-counter">
+                        <button class="counter-button counter-minus" data-id="${id}">-</button>
+                        <span class="counter">${count}</span>
+                        <button class="counter-button counter-plus" data-id="${id}">+</button>
+                    </div>
+                </div>
+            `;
+
+            modalBody.insertAdjacentHTML('afterbegin', itemCart);
+        });
+
+        const totalPrice = cart.reduce((result, item) => {
+            return result + (parseFloat(item.cost)) * item.count;
+        }, 0);
+
+        modalPricetag.textContent = totalPrice + ' ₽';
+    };
+
+    const changeCount = (event) => {
+        const target = event.target;
+
+        if (target.classList.contains('counter-button')) {
+            const food = cart.find((item) => {
+                return item.id === target.dataset.id;
+            });
+            if (target.classList.contains('counter-minus')) {
+                food.count--;
+                if (food.count === 0) {
+                    cart.splice(cart.indexOf(food), 1);
+                }
+            }
+            if (target.classList.contains('counter-plus')) {
+                food.count++;
+            }
+            renderCart();
+        }
+    };
+
     const init = () => {
         getData('./db/partners.json').then((data) => {
             data.forEach(createCardRestaurant);
         });
-    
+
+        cartButton.addEventListener("click", () => {
+            renderCart();
+            toggleModal();
+        });
+        
+        clearCart.addEventListener('click', () => {
+            cart.length = 0;
+            renderCart();
+        });
+
+        modalBody.addEventListener('click', changeCount);
+
+        closeModal.addEventListener("click", toggleModal);
+
         cardsRestaurants.addEventListener('click', openGoods);
-    
+
+        cardsMenu.addEventListener('click', addToCart);
+
         logo.addEventListener('click', () => {
             containerPromo.classList.remove('hide');
             restaurants.classList.remove('hide');
